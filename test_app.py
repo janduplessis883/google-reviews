@@ -79,12 +79,14 @@ class ReviewResponseTests(unittest.TestCase):
         }
         draft = build_draft_response(review)
 
-        subject, body = build_email(review, draft)
+        subject, body, html_body = build_email(review, draft)
 
         self.assertEqual(subject, "New Google Review: 5/5 from David Korn")
         self.assertIn("Reviewer: David Korn", body)
         self.assertIn("Draft response:", body)
         self.assertIn(draft["draftResponse"], body)
+        self.assertIn("<h2>New Google Review", html_body)
+        self.assertIn("Very thorough charming attention.", html_body)
 
 
 if __name__ == "__main__":

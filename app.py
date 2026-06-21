@@ -1,9 +1,8 @@
 import hmac
+import html
 import json
 import os
 import re
-import urllib.error
-import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -184,8 +183,25 @@ def build_email(review, draft):
             "- Do not discuss clinical details or individual circumstances in public replies.",
         ]
     )
+    html_body = f"""
+    <h2>New Google Review for {html.escape(review.get("businessName") or PRACTICE_NAME)}</h2>
+    <p><strong>Reviewer:</strong> {html.escape(reviewer)}</p>
+    <p><strong>Rating:</strong> {html.escape(rating_text)}</p>
+    <p><strong>Created:</strong> {html.escape(created_at)}</p>
+    <p><strong>Review URL:</strong> {html.escape(review_url)}</p>
+    <h3>Review</h3>
+    <p>{html.escape(review_text).replace("\n", "<br>")}</p>
+    <h3>Draft response</h3>
+    <p>{html.escape(draft.get("draftResponse", "")).replace("\n", "<br>")}</p>
+    <h3>Safety notes</h3>
+    <ul>
+      <li>Review this draft before publishing.</li>
+      <li>Do not confirm whether the reviewer is a patient.</li>
+      <li>Do not discuss clinical details or individual circumstances in public replies.</li>
+    </ul>
+    """.strip()
 
-    return subject, body
+    return subject, body, html_body
 
 
 def send_email_alert(review, draft):
@@ -196,46 +212,38 @@ def send_email_alert(review, draft):
             "reason": "RESEND_API_KEY is not configured.",
         }
 
-    subject, body = build_email(review, draft)
-    payload = json.dumps(
-        {
-            "from": EMAIL_FROM,
-            "to": [EMAIL_TO],
-            "subject": subject,
-            "text": body,
+    try:
+        import resend
+    except ImportError:
+        return {
+            "sent": False,
+            "provider": "resend",
+            "error": "The resend package is not installed. Run pip install -r requirements.txt.",
         }
-    ).encode("utf-8")
-
-    request = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json",
-        },
-    )
 
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            response_body = response.read().decode("utf-8")
-            resend_response = json.loads(response_body) if response_body else {}
-            return {
-                "sent": True,
-                "provider": "resend",
-                "id": resend_response.get("id"),
+        subject, text_body, html_body = build_email(review, draft)
+        resend.api_key = RESEND_API_KEY
+        result = resend.Emails.send(
+            {
+                "from": EMAIL_FROM,
+                "to": [EMAIL_TO],
+                "subject": subject,
+                "html": html_body,
+                "text": text_body,
             }
-    except urllib.error.HTTPError as error:
+        )
+
         return {
-            "sent": False,
+            "sent": True,
             "provider": "resend",
-            "error": error.read().decode("utf-8"),
+            "id": result.get("id"),
         }
-    except urllib.error.URLError as error:
+    except Exception as error:
         return {
             "sent": False,
             "provider": "resend",
-            "error": str(error.reason),
+            "error": str(error),
         }
 
 

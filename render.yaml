@@ -11,3 +11,9 @@ services:
         value: Stanhope Mews Surgery
       - key: WEBHOOK_SECRET
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: hello@attribut.me
+      - key: EMAIL_TO
+        value: jan.duplessis@nhs.net
