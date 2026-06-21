@@ -1,6 +1,6 @@
 import unittest
 
-from app import build_draft_response, classify_review, normalize_review
+from app import build_draft_response, build_email, classify_review, normalize_review
 
 
 class ReviewResponseTests(unittest.TestCase):
@@ -67,6 +67,24 @@ class ReviewResponseTests(unittest.TestCase):
             ),
             "positive",
         )
+
+    def test_builds_plain_text_email(self):
+        review = {
+            "businessName": "Stanhope Mews Surgery",
+            "reviewerName": "David Korn",
+            "rating": 5,
+            "reviewText": "Very thorough charming attention.",
+            "reviewUrl": "https://example.com/review",
+            "createdAt": "2026-05-14T10:31:13.473785Z",
+        }
+        draft = build_draft_response(review)
+
+        subject, body = build_email(review, draft)
+
+        self.assertEqual(subject, "New Google Review: 5/5 from David Korn")
+        self.assertIn("Reviewer: David Korn", body)
+        self.assertIn("Draft response:", body)
+        self.assertIn(draft["draftResponse"], body)
 
 
 if __name__ == "__main__":

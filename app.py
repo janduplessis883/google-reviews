@@ -2,6 +2,8 @@ import hmac
 import json
 import os
 import re
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -9,6 +11,9 @@ from urllib.parse import parse_qs, urlparse
 PORT = int(os.environ.get("PORT", "3000"))
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 PRACTICE_NAME = os.environ.get("PRACTICE_NAME", "Stanhope Mews Surgery")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "hello@attribut.me")
+EMAIL_TO = os.environ.get("EMAIL_TO", "jan.duplessis@nhs.net")
 MAX_BODY_BYTES = 1024 * 1024
 
 
@@ -149,6 +154,91 @@ def build_draft_response(review):
     }
 
 
+def build_email(review, draft):
+    reviewer = review.get("reviewerName") or "Unknown reviewer"
+    rating = review.get("rating")
+    rating_text = f"{rating}/5" if rating is not None else "No rating provided"
+    review_text = review.get("reviewText") or "No review text provided."
+    review_url = review.get("reviewUrl") or "No review URL provided."
+    created_at = review.get("createdAt") or "No date provided."
+
+    subject = f"New Google Review: {rating_text} from {reviewer}"
+    body = "\n".join(
+        [
+            f"New Google Review for {review.get('businessName') or PRACTICE_NAME}",
+            "",
+            f"Reviewer: {reviewer}",
+            f"Rating: {rating_text}",
+            f"Created: {created_at}",
+            f"Review URL: {review_url}",
+            "",
+            "Review:",
+            review_text,
+            "",
+            "Draft response:",
+            draft.get("draftResponse", ""),
+            "",
+            "Safety notes:",
+            "- Review this draft before publishing.",
+            "- Do not confirm whether the reviewer is a patient.",
+            "- Do not discuss clinical details or individual circumstances in public replies.",
+        ]
+    )
+
+    return subject, body
+
+
+def send_email_alert(review, draft):
+    if not RESEND_API_KEY:
+        return {
+            "sent": False,
+            "skipped": True,
+            "reason": "RESEND_API_KEY is not configured.",
+        }
+
+    subject, body = build_email(review, draft)
+    payload = json.dumps(
+        {
+            "from": EMAIL_FROM,
+            "to": [EMAIL_TO],
+            "subject": subject,
+            "text": body,
+        }
+    ).encode("utf-8")
+
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            response_body = response.read().decode("utf-8")
+            resend_response = json.loads(response_body) if response_body else {}
+            return {
+                "sent": True,
+                "provider": "resend",
+                "id": resend_response.get("id"),
+            }
+    except urllib.error.HTTPError as error:
+        return {
+            "sent": False,
+            "provider": "resend",
+            "error": error.read().decode("utf-8"),
+        }
+    except urllib.error.URLError as error:
+        return {
+            "sent": False,
+            "provider": "resend",
+            "error": str(error.reason),
+        }
+
+
 class WebhookHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         print("%s - %s" % (self.address_string(), format % args))
@@ -196,6 +286,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         review = normalize_review(payload)
         draft = build_draft_response(review)
+        email_status = send_email_alert(review, draft)
 
         self.send_json(
             200,
@@ -203,6 +294,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 "success": True,
                 "review": review,
                 **draft,
+                "email": email_status,
                 "safetyNotes": [
                     "Draft only: review before publishing.",
                     "Do not confirm whether the reviewer is a patient.",

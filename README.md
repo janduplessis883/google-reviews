@@ -34,7 +34,12 @@ The response includes:
 {
   "success": true,
   "sentiment": "negative",
-  "draftResponse": "Thank you for your feedback..."
+  "draftResponse": "Thank you for your feedback...",
+  "email": {
+    "sent": true,
+    "provider": "resend",
+    "id": "..."
+  }
 }
 ```
 
@@ -72,6 +77,9 @@ Prefer the `x-webhook-secret` header in Zapier.
 4. Add environment variables:
    - `PRACTICE_NAME=Stanhope Mews Surgery`
    - `WEBHOOK_SECRET=choose-a-long-random-secret`
+   - `RESEND_API_KEY=your-resend-api-key`
+   - `EMAIL_FROM=hello@attribut.me`
+   - `EMAIL_TO=jan.duplessis@nhs.net`
 5. In Zapier, POST review data to:
 
 ```text
@@ -79,3 +87,16 @@ https://your-render-service.onrender.com/webhooks/google-review
 ```
 
 The first version intentionally creates draft replies only. Review them before posting publicly.
+
+## Email alerts
+
+When `RESEND_API_KEY` is configured, every accepted webhook sends a plain-text email alert through Resend.
+
+Defaults:
+
+```text
+EMAIL_FROM=hello@attribut.me
+EMAIL_TO=jan.duplessis@nhs.net
+```
+
+Make sure `hello@attribut.me` is a verified sender or domain in Resend.
