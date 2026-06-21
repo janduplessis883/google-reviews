@@ -24,18 +24,33 @@ def parse_rating(value):
     if isinstance(value, (int, float)):
         return int(value)
 
-    match = re.search(r"[1-5]", str(value or ""))
+    star_words = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+    }
+    normalized = str(value or "").strip().lower()
+
+    if normalized in star_words:
+        return star_words[normalized]
+
+    match = re.search(r"[1-5]", normalized)
     return int(match.group(0)) if match else None
 
 
 def normalize_review(payload):
+    review_payload = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     rating = parse_rating(
         first_present(
-            payload,
+            review_payload,
             [
                 "rating",
                 "starRating",
+                "star_rating",
                 "stars",
+                "number_rating",
                 "review_rating",
                 "reviewRating",
                 "score",
@@ -45,21 +60,24 @@ def normalize_review(payload):
 
     return {
         "businessName": str(
-            first_present(payload, ["businessName", "business", "locationName"])
+            first_present(review_payload, ["businessName", "business", "locationName"])
             or PRACTICE_NAME
         ),
         "reviewerName": str(
-            first_present(payload, ["reviewerName", "authorName", "name", "reviewer"])
+            first_present(review_payload, ["reviewerName", "authorName", "name", "reviewer"])
             or ""
         ),
         "rating": rating,
         "reviewText": str(
-            first_present(payload, ["reviewText", "comment", "text", "review", "message"])
+            first_present(review_payload, ["reviewText", "comment", "text", "review", "message"])
             or ""
         ),
-        "reviewUrl": str(first_present(payload, ["reviewUrl", "url", "link"]) or ""),
+        "reviewUrl": str(first_present(review_payload, ["reviewUrl", "url", "link"]) or ""),
         "createdAt": str(
-            first_present(payload, ["createdAt", "reviewCreatedAt", "publishedAt", "date"])
+            first_present(
+                review_payload,
+                ["createdAt", "created_time", "reviewCreatedAt", "publishedAt", "date"],
+            )
             or ""
         ),
     }

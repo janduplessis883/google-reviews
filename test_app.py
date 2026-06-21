@@ -21,6 +21,29 @@ class ReviewResponseTests(unittest.TestCase):
         self.assertEqual(review["reviewText"], "Hard to get through on the phone")
         self.assertEqual(review["reviewUrl"], "https://example.com/review")
 
+    def test_normalizes_nested_zapier_data_fields(self):
+        review = normalize_review(
+            {
+                "payload_type": "json",
+                "data": {
+                    "reviewer": "David Korn",
+                    "comment": "very thorough charming attention. no complaints only compliments",
+                    "number_rating": 5,
+                    "created_time": "2026-05-14T10:31:13.473785Z",
+                    "star_rating": "FIVE",
+                    "average_rating": 3.9000000953674316,
+                },
+            }
+        )
+
+        self.assertEqual(review["reviewerName"], "David Korn")
+        self.assertEqual(review["rating"], 5)
+        self.assertEqual(
+            review["reviewText"],
+            "very thorough charming attention. no complaints only compliments",
+        )
+        self.assertEqual(review["createdAt"], "2026-05-14T10:31:13.473785Z")
+
     def test_uses_confidential_negative_response_for_low_ratings(self):
         result = build_draft_response(
             {
