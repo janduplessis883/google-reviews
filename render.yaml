@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: google-reviews-webhook
+    runtime: python
+    plan: free
+    buildCommand: ""
+    startCommand: python app.py
+    healthCheckPath: /health
+    envVars:
+      - key: PRACTICE_NAME
+        value: Stanhope Mews Surgery
+      - key: WEBHOOK_SECRET
+        sync: false
